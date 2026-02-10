@@ -1,5 +1,5 @@
 
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import { GoogleGenAI } from "@google/genai";
 import { 
@@ -50,6 +50,7 @@ const FoodAnalyzer = () => {
     setResult(null);
 
     try {
+      // Create a fresh instance to ensure the latest API key is used
       const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
       
       const prompt = `
@@ -62,7 +63,7 @@ const FoodAnalyzer = () => {
            - "Healthy": Natural, whole ingredients.
            - "Harmful": Excessive refined sugar, palm oil, MSG (E621), artificial colors (Sunset Yellow, etc.), high sodium, or trans fats.
            - "Neutral": Stabilizers, emulsifiers (if safe), or minor additives.
-        Step 4: DOUBLE CHECK the quantities. If the product has multiple variants (e.g., Maggi classic vs Oats), specify which one you found.
+        Step 4: DOUBLE CHECK the quantities. If the product has multiple variants, specify which one you found.
         
         CRITICAL: Provide the response in this exact plain-text block structure:
         
@@ -77,8 +78,9 @@ const FoodAnalyzer = () => {
         LIST_END
       `;
 
+      // Using gemini-flash-lite-latest for high efficiency and better free-tier rate limits
       const response = await ai.models.generateContent({
-        model: 'gemini-3-flash-preview',
+        model: 'gemini-flash-lite-latest',
         contents: prompt,
         config: {
           tools: [{ googleSearch: {} }],
@@ -97,7 +99,7 @@ const FoodAnalyzer = () => {
           uri: chunk.web.uri,
         }));
 
-      // Robust Parsing with RegEx
+      // Parsing Logic
       let productName = query;
       let summary = "Analysis complete.";
       let fssaiNotice = "";
@@ -111,7 +113,8 @@ const FoodAnalyzer = () => {
       };
 
       productName = extractValue("PRODUCT") || query;
-      healthScore = parseInt(extractValue("HEALTH_SCORE") || "50");
+      const parsedScore = parseInt(extractValue("HEALTH_SCORE") || "50");
+      healthScore = isNaN(parsedScore) ? 50 : parsedScore;
       
       const summaryMatch = text.match(/SUMMARY:\s*([\s\S]*?)(?=HEALTH_SCORE|FSSAI_NOTICE|LIST_START|$)/i);
       if (summaryMatch) summary = summaryMatch[1].trim();
@@ -121,7 +124,6 @@ const FoodAnalyzer = () => {
         fssaiNotice = fssaiMatch[1].trim();
       }
 
-      // Extract List section
       const listMatch = text.match(/LIST_START([\s\S]*?)LIST_END/i);
       const rows = listMatch ? listMatch[1].trim().split('\n') : [];
 
@@ -145,14 +147,18 @@ const FoodAnalyzer = () => {
       }
 
       if (ingredients.length === 0) {
-        throw new Error("Ingredient list could not be parsed. Please verify the product name and try again.");
+        throw new Error("Ingredient list could not be parsed. Please verify the product name.");
       }
 
       setResult({ productName, summary, ingredients, sources, fssaiNotice, healthScore });
 
     } catch (err: any) {
       console.error(err);
-      setError(err.message || "Something went wrong while scanning the product.");
+      if (err.message?.includes("429") || err.message?.includes("RESOURCE_EXHAUSTED")) {
+        setError("Rate limit exceeded. Gemini Flash Lite has higher limits, but the API may still be busy. Please wait a moment and try again.");
+      } else {
+        setError(err.message || "Something went wrong while scanning the product.");
+      }
     } finally {
       setLoading(false);
     }
@@ -172,7 +178,6 @@ const FoodAnalyzer = () => {
 
   return (
     <div className="min-h-screen bg-[#FAFAFA] text-slate-900 font-sans selection:bg-orange-100">
-      {/* Navbar */}
       <nav className="bg-white border-b border-slate-200 sticky top-0 z-50">
         <div className="max-w-6xl mx-auto px-4 h-16 flex items-center justify-between">
           <div className="flex items-center gap-3">
@@ -184,14 +189,13 @@ const FoodAnalyzer = () => {
             </span>
           </div>
           <div className="hidden md:flex gap-6 items-center text-sm font-bold text-slate-400">
-            <span className="flex items-center gap-2"><Zap className="w-4 h-4 text-orange-400" /> FSSAI Verified</span>
-            <span className="flex items-center gap-2"><CheckCircle2 className="w-4 h-4 text-emerald-400" /> Grounded Search</span>
+            <span className="flex items-center gap-2"><Zap className="w-4 h-4 text-orange-400" /> Flash Lite Engine</span>
+            <span className="flex items-center gap-2"><CheckCircle2 className="w-4 h-4 text-emerald-400" /> FSSAI Focused</span>
           </div>
         </div>
       </nav>
 
       <main className="max-w-4xl mx-auto px-4 py-16">
-        {/* Hero Section */}
         <div className="text-center mb-16 space-y-6">
           <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-orange-50 border border-orange-100 text-orange-700 text-xs font-black uppercase tracking-widest shadow-sm">
             <ShoppingBag className="w-3.5 h-3.5" /> India's Nutrition Decoder
@@ -205,7 +209,7 @@ const FoodAnalyzer = () => {
           </p>
 
           <form onSubmit={analyzeFood} className="relative max-w-2xl mx-auto pt-4">
-            <div className="relative group transition-all duration-300">
+            <div className="relative group">
               <div className="absolute inset-0 bg-orange-500/10 blur-2xl rounded-3xl opacity-0 group-focus-within:opacity-100 transition-opacity"></div>
               <div className="relative">
                 <Search className="absolute left-5 top-1/2 -translate-y-1/2 text-slate-400 group-focus-within:text-orange-500 transition-colors" />
@@ -242,7 +246,6 @@ const FoodAnalyzer = () => {
           )}
         </div>
 
-        {/* Loading */}
         {loading && (
           <div className="py-24 flex flex-col items-center animate-in fade-in">
             <div className="relative w-24 h-24">
@@ -253,13 +256,12 @@ const FoodAnalyzer = () => {
               </div>
             </div>
             <div className="mt-8 text-center space-y-2">
-              <h3 className="text-xl font-black text-slate-800">Double-checking labels...</h3>
-              <p className="text-sm text-slate-400 font-bold uppercase tracking-widest">Scanning FSSAI Data & Search Grounding</p>
+              <h3 className="text-xl font-black text-slate-800">Analyzing Ingredients...</h3>
+              <p className="text-sm text-slate-400 font-bold uppercase tracking-widest">Powered by Gemini 2.5 Flash Lite</p>
             </div>
           </div>
         )}
 
-        {/* Error */}
         {error && (
           <div className="bg-white border-2 border-rose-100 p-8 rounded-[2rem] shadow-xl animate-in zoom-in-95">
             <div className="flex items-center gap-4 mb-4">
@@ -268,7 +270,7 @@ const FoodAnalyzer = () => {
               </div>
               <div>
                 <h3 className="text-xl font-black text-slate-800">Scan Interrupted</h3>
-                <p className="text-slate-500 font-medium">We couldn't finalize the report for this product.</p>
+                <p className="text-slate-500 font-medium">We encountered a temporary issue.</p>
               </div>
             </div>
             <p className="bg-rose-50 p-4 rounded-xl text-rose-700 text-sm font-bold border border-rose-100 mb-6 italic">"{error}"</p>
@@ -276,15 +278,13 @@ const FoodAnalyzer = () => {
               onClick={() => analyzeFood()}
               className="w-full py-4 bg-slate-900 text-white rounded-2xl font-black uppercase tracking-[0.2em] text-xs hover:bg-black transition-all flex items-center justify-center gap-2"
             >
-              <RotateCcw className="w-4 h-4" /> Try Analysis Again
+              <RotateCcw className="w-4 h-4" /> Try Again
             </button>
           </div>
         )}
 
-        {/* Result */}
         {result && (
           <div className="space-y-8 animate-in slide-in-from-bottom-8 duration-500">
-            {/* Main Report Card */}
             <div className="bg-white rounded-[2.5rem] border border-slate-200 shadow-2xl overflow-hidden">
               <div className="p-10">
                 <div className="flex flex-col md:flex-row justify-between items-start gap-8 mb-10">
@@ -311,15 +311,13 @@ const FoodAnalyzer = () => {
                       <Info className="w-6 h-6 text-orange-600" />
                     </div>
                     <div>
-                      <h4 className="text-xs font-black text-orange-800 uppercase tracking-widest mb-1">FSSAI / Regulatory Alert</h4>
+                      <h4 className="text-xs font-black text-orange-800 uppercase tracking-widest mb-1">Regulatory Alert</h4>
                       <p className="text-orange-900 font-bold">{result.fssaiNotice}</p>
                     </div>
                   </div>
                 )}
 
-                {/* Ingredients Lists */}
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-8 pt-4">
-                  {/* Good Column */}
                   <div className="space-y-4">
                     <h5 className="flex items-center gap-2 text-emerald-700 font-black text-xs uppercase tracking-widest pl-2">
                       <Leaf className="w-4 h-4" /> Healthy & Safe
@@ -333,12 +331,8 @@ const FoodAnalyzer = () => {
                         <p className="text-xs text-slate-500 font-medium leading-relaxed">{ing.description}</p>
                       </div>
                     ))}
-                    {result.ingredients.filter(i => i.status !== 'harmful').length === 0 && (
-                      <p className="text-slate-400 italic text-sm p-8 text-center bg-slate-50 rounded-3xl border border-dashed border-slate-200">No primary healthy ingredients identified.</p>
-                    )}
                   </div>
 
-                  {/* Concern Column */}
                   <div className="space-y-4">
                     <h5 className="flex items-center gap-2 text-rose-700 font-black text-xs uppercase tracking-widest pl-2">
                       <AlertCircle className="w-4 h-4" /> Concerns & Chemicals
@@ -362,11 +356,10 @@ const FoodAnalyzer = () => {
                 </div>
               </div>
 
-              {/* Citations Footer */}
               {result.sources.length > 0 && (
                 <div className="bg-slate-900 p-10">
                   <h6 className="text-white font-black text-xs uppercase tracking-[0.2em] mb-6 flex items-center gap-2">
-                    <ExternalLink className="w-4 h-4 text-orange-500" /> Evidence-Based Sources
+                    <ExternalLink className="w-4 h-4 text-orange-500" /> Information Sources
                   </h6>
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                     {result.sources.map((s, idx) => (
@@ -391,25 +384,18 @@ const FoodAnalyzer = () => {
                 onClick={() => { setQuery(''); setResult(null); }}
                 className="flex items-center gap-2 text-slate-400 hover:text-orange-600 font-black text-[10px] uppercase tracking-widest transition-colors"
               >
-                <RotateCcw className="w-3.5 h-3.5" /> Start New Scan
+                <RotateCcw className="w-3.5 h-3.5" /> New Analysis
               </button>
             </div>
           </div>
         )}
 
-        {/* Legal Footer */}
         <footer className="mt-32 pt-12 border-t border-slate-200 text-center space-y-4">
-          <div className="flex justify-center gap-1">
-            <div className="w-8 h-1 bg-orange-600"></div>
-            <div className="w-8 h-1 bg-white border border-slate-200"></div>
-            <div className="w-8 h-1 bg-emerald-600"></div>
-          </div>
           <p className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em]">
-            PurePlate Bharat AI v2.5 • Developed for Health Awareness
+            PurePlate Bharat AI • Gemini 2.5 Flash Lite
           </p>
           <p className="text-xs text-slate-400 max-w-lg mx-auto font-medium leading-relaxed">
-            Disclaimer: Analysis is based on large language models and real-time search. Data may vary by batch or region. 
-            This is not medical advice. Always check the physical FSSAI label on the pack.
+            Note: Data is retrieved in real-time. Please cross-verify with physical packaging labels.
           </p>
         </footer>
       </main>

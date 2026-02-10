@@ -1,5 +1,5 @@
 {
-  "description": "PurePlate AI: A smart food ingredient analyzer that uses Gemini 3 Pro with Google Search grounding to breakdown components and health ratings.",
+  "description": "PurePlate AI: A high-efficiency food ingredient analyzer using Gemini 2.5 Flash Lite with real-time web grounding for label verification.",
   "requestFramePermissions": [],
   "name": "PUREPLATEBHARATH"
 }
