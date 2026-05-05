@@ -41,6 +41,36 @@ const FoodAnalyzer = () => {
   const [result, setResult] = useState<AnalysisResult | null>(null);
   const [error, setError] = useState<string | null>(null);
 
+  const analyzeWithRetry = async (prompt: string, maxRetries = 3) => {
+    const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
+    let lastError: any = null;
+    
+    for (let i = 0; i < maxRetries; i++) {
+      try {
+        const response = await ai.models.generateContent({
+          model: 'gemini-3-flash-preview',
+          contents: prompt,
+          config: {
+            tools: [{ googleSearch: {} }],
+          },
+        });
+        return response;
+      } catch (err: any) {
+        lastError = err;
+        const isRateLimit = err.message?.includes("429") || err.message?.includes("RESOURCE_EXHAUSTED");
+        
+        if (isRateLimit && i < maxRetries - 1) {
+          const waitTime = Math.pow(2, i) * 1000 + Math.random() * 1000;
+          console.warn(`Rate limit hit, retrying in ${Math.round(waitTime)}ms... (Attempt ${i + 1}/${maxRetries})`);
+          await new Promise(resolve => setTimeout(resolve, waitTime));
+          continue;
+        }
+        throw err;
+      }
+    }
+    throw lastError;
+  };
+
   const analyzeFood = async (e?: React.FormEvent) => {
     if (e) e.preventDefault();
     if (!query.trim()) return;
@@ -50,9 +80,6 @@ const FoodAnalyzer = () => {
     setResult(null);
 
     try {
-      // Create a fresh instance to ensure the latest API key is used
-      const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
-      
       const prompt = `
         Perform a deep dive analysis of the Indian food product: "${query}". 
         This product is specifically being checked for the Indian market.
@@ -78,14 +105,7 @@ const FoodAnalyzer = () => {
         LIST_END
       `;
 
-      // Using gemini-flash-lite-latest for high efficiency and better free-tier rate limits
-      const response = await ai.models.generateContent({
-        model: 'gemini-flash-lite-latest',
-        contents: prompt,
-        config: {
-          tools: [{ googleSearch: {} }],
-        },
-      });
+      const response = await analyzeWithRetry(prompt);
 
       const text = response.text || "";
       if (!text) throw new Error("No data received from the analyzer. Please try again.");
@@ -155,7 +175,7 @@ const FoodAnalyzer = () => {
     } catch (err: any) {
       console.error(err);
       if (err.message?.includes("429") || err.message?.includes("RESOURCE_EXHAUSTED")) {
-        setError("Rate limit exceeded. Gemini Flash Lite has higher limits, but the API may still be busy. Please wait a moment and try again.");
+        setError("The AI is currently receiving many requests. We tried to retry automatically, but the limit is still active. Please wait a minute and try again.");
       } else {
         setError(err.message || "Something went wrong while scanning the product.");
       }
@@ -189,7 +209,7 @@ const FoodAnalyzer = () => {
             </span>
           </div>
           <div className="hidden md:flex gap-6 items-center text-sm font-bold text-slate-400">
-            <span className="flex items-center gap-2"><Zap className="w-4 h-4 text-orange-400" /> Flash Lite Engine</span>
+            <span className="flex items-center gap-2"><Zap className="w-4 h-4 text-orange-400" /> Gemini 3 Flash Engine</span>
             <span className="flex items-center gap-2"><CheckCircle2 className="w-4 h-4 text-emerald-400" /> FSSAI Focused</span>
           </div>
         </div>
@@ -257,7 +277,7 @@ const FoodAnalyzer = () => {
             </div>
             <div className="mt-8 text-center space-y-2">
               <h3 className="text-xl font-black text-slate-800">Analyzing Ingredients...</h3>
-              <p className="text-sm text-slate-400 font-bold uppercase tracking-widest">Powered by Gemini 2.5 Flash Lite</p>
+              <p className="text-sm text-slate-400 font-bold uppercase tracking-widest">Powered by Gemini 3 Flash Preview</p>
             </div>
           </div>
         )}
@@ -392,7 +412,7 @@ const FoodAnalyzer = () => {
 
         <footer className="mt-32 pt-12 border-t border-slate-200 text-center space-y-4">
           <p className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em]">
-            PurePlate Bharat AI • Gemini 2.5 Flash Lite
+            PurePlate Bharat AI • Gemini 3 Flash Preview
           </p>
           <p className="text-xs text-slate-400 max-w-lg mx-auto font-medium leading-relaxed">
             Note: Data is retrieved in real-time. Please cross-verify with physical packaging labels.
