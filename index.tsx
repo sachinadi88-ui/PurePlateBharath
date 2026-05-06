@@ -38,6 +38,7 @@ interface AnalysisResult {
 const FoodAnalyzer = () => {
   const [query, setQuery] = useState('');
   const [loading, setLoading] = useState(false);
+  const [loadingStep, setLoadingStep] = useState('');
   const [result, setResult] = useState<AnalysisResult | null>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -64,7 +65,6 @@ const FoodAnalyzer = () => {
       } catch (err: any) {
         lastError = err;
         
-        // Comprehensive rate limit detection for Gemini SDK
         const errMsg = (err.message || "").toUpperCase();
         const errStatus = err.status || (err.response ? err.response.status : null);
         
@@ -76,14 +76,11 @@ const FoodAnalyzer = () => {
                           errMsg.includes("THROTTLED");
         
         if (isRateLimit && i < maxRetries - 1) {
-          // Faster initial backoff for better responsiveness
-          const waitTime = Math.pow(2, i) * 1500 + (Math.random() * 1000);
-          console.warn(`Gemini Quota. Attempt ${i + 1}/${maxRetries}. Retrying in ${Math.round(waitTime)}ms...`);
+          const waitTime = Math.pow(2, i) * 1000 + (Math.random() * 500);
+          setLoadingStep(`Quota limit hit. Retrying in ${Math.round(waitTime/1000)}s...`);
           await new Promise(resolve => setTimeout(resolve, waitTime));
           continue;
         }
-        
-        // If it's a safety error or something else, don't retry fruitlessly
         throw err;
       }
     }
@@ -95,12 +92,16 @@ const FoodAnalyzer = () => {
     if (!query.trim()) return;
 
     setLoading(true);
+    setLoadingStep('Searching Indian ingredient databases...');
     setError(null);
     setResult(null);
 
     try {
       const prompt = `
-        Search & Analyze: "${query}" in India.
+        Instant Search & Analyze: "${query}" in India.
+        
+        1. Unified Search: Find the most recent ingredient label and FSSAI status for "${query}".
+        2. Rapid Verdict: Evaluate health impact based on Indian nutritional standards.
         
         Format your response EXCLUSIVELY as follows:
         
@@ -115,7 +116,11 @@ const FoodAnalyzer = () => {
         LIST_END
       `;
 
+      setTimeout(() => setLoadingStep('Analyzing chemical additives...'), 3000);
+      setTimeout(() => setLoadingStep('Verifying FSSAI guidelines...'), 6000);
+
       const response = await analyzeWithRetry(prompt);
+      setLoadingStep('Generating clean report...');
       const text = response.text || "";
       
       if (!text) throw new Error("No data received from the analyzer. Please try again.");
@@ -290,7 +295,7 @@ const FoodAnalyzer = () => {
               </div>
             </div>
             <div className="mt-8 text-center space-y-2">
-              <h3 className="text-xl font-black text-slate-800">Analyzing Ingredients...</h3>
+              <h3 className="text-xl font-black text-slate-800">{loadingStep || 'Analyzing Ingredients...'}</h3>
               <p className="text-sm text-slate-400 font-bold uppercase tracking-widest">Powered by Gemini 3 Flash</p>
             </div>
           </div>
