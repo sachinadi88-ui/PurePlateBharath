@@ -41,7 +41,7 @@ const FoodAnalyzer = () => {
   const [result, setResult] = useState<AnalysisResult | null>(null);
   const [error, setError] = useState<string | null>(null);
 
-  const analyzeWithRetry = async (prompt: string, maxRetries = 3) => {
+  const analyzeWithRetry = async (prompt: string, maxRetries = 4) => {
     const apiKey = process.env.GEMINI_API_KEY || import.meta.env.VITE_GEMINI_API_KEY;
     
     if (!apiKey) {
@@ -54,23 +54,35 @@ const FoodAnalyzer = () => {
     for (let i = 0; i < maxRetries; i++) {
       try {
         const response = await ai.models.generateContent({
-          model: 'gemini-3-flash-preview',
+          model: 'gemini-1.5-flash-latest',
           contents: prompt,
           config: {
-            tools: [{ googleSearch: {} }],
+            tools: [{ googleSearch: {} }] as any,
           },
         });
         return response;
       } catch (err: any) {
         lastError = err;
-        const isRateLimit = err.message?.includes("429") || err.message?.includes("RESOURCE_EXHAUSTED");
+        
+        // Comprehensive rate limit detection for Gemini SDK
+        const errMsg = (err.message || "").toUpperCase();
+        const errStatus = err.status || (err.response ? err.response.status : null);
+        
+        const isRateLimit = errStatus === 429 || 
+                          errMsg.includes("429") || 
+                          errMsg.includes("RESOURCE_EXHAUSTED") || 
+                          errMsg.includes("RATE_LIMIT") ||
+                          errMsg.includes("QUOTA");
         
         if (isRateLimit && i < maxRetries - 1) {
-          const waitTime = Math.pow(2, i) * 1000 + Math.random() * 1000;
-          console.warn(`Rate limit hit, retrying in ${Math.round(waitTime)}ms... (Attempt ${i + 1}/${maxRetries})`);
+          // 4s, 8s, 16s... backoff
+          const waitTime = Math.pow(2, i + 2) * 1000 + (Math.random() * 2000);
+          console.warn(`Gemini Quota limit. Retry ${i + 1}/${maxRetries} in ${Math.round(waitTime)}ms...`);
           await new Promise(resolve => setTimeout(resolve, waitTime));
           continue;
         }
+        
+        // If it's a safety error or something else, don't retry fruitlessly
         throw err;
       }
     }
@@ -112,12 +124,16 @@ const FoodAnalyzer = () => {
       `;
 
       const response = await analyzeWithRetry(prompt);
-
       const text = response.text || "";
+      
       if (!text) throw new Error("No data received from the analyzer. Please try again.");
 
       // Parse grounding sources
-      const groundingChunks = response.candidates?.[0]?.groundingMetadata?.groundingChunks || [];
+      // For @google/genai, groundingMetadata is inside candidates[0]
+      const candidates = (response as any).candidates || [];
+      const metadata = candidates[0]?.groundingMetadata || {};
+      const groundingChunks = metadata.groundingChunks || [];
+      
       const sources = groundingChunks
         .filter((chunk: any) => chunk.web)
         .map((chunk: any) => ({
@@ -155,7 +171,7 @@ const FoodAnalyzer = () => {
 
       for (const row of rows) {
         const cleanRow = row.replace(/^[-*•\d.]\s*/, '').trim();
-        const parts = cleanRow.split('|').map(p => p.trim());
+        const parts = cleanRow.split('|').map((p: string) => p.trim());
         
         if (parts.length >= 3) {
           const statusRaw = parts[2].toLowerCase();
@@ -181,7 +197,7 @@ const FoodAnalyzer = () => {
     } catch (err: any) {
       console.error(err);
       if (err.message?.includes("429") || err.message?.includes("RESOURCE_EXHAUSTED")) {
-        setError("The AI is currently receiving many requests. We tried to retry automatically, but the limit is still active. Please wait a minute and try again.");
+        setError("The service is under heavy load. We tried multiple retries but your Gemini API quota is full. If this persists, try using a different Gemini API Key or wait a few minutes.");
       } else {
         setError(err.message || "Something went wrong while scanning the product.");
       }
@@ -215,7 +231,7 @@ const FoodAnalyzer = () => {
             </span>
           </div>
           <div className="hidden md:flex gap-6 items-center text-sm font-bold text-slate-400">
-            <span className="flex items-center gap-2"><Zap className="w-4 h-4 text-orange-400" /> Gemini 3 Flash Engine</span>
+            <span className="flex items-center gap-2"><Zap className="w-4 h-4 text-orange-400" /> Gemini 1.5 Flash Engine</span>
             <span className="flex items-center gap-2"><CheckCircle2 className="w-4 h-4 text-emerald-400" /> FSSAI Focused</span>
           </div>
         </div>
@@ -283,7 +299,7 @@ const FoodAnalyzer = () => {
             </div>
             <div className="mt-8 text-center space-y-2">
               <h3 className="text-xl font-black text-slate-800">Analyzing Ingredients...</h3>
-              <p className="text-sm text-slate-400 font-bold uppercase tracking-widest">Powered by Gemini 3 Flash Preview</p>
+              <p className="text-sm text-slate-400 font-bold uppercase tracking-widest">Powered by Gemini 1.5 Flash</p>
             </div>
           </div>
         )}
@@ -418,7 +434,7 @@ const FoodAnalyzer = () => {
 
         <footer className="mt-32 pt-12 border-t border-slate-200 text-center space-y-4">
           <p className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em]">
-            PurePlate Bharat AI • Gemini 3 Flash Preview
+            PurePlate Bharat AI • Gemini 1.5 Flash
           </p>
           <p className="text-xs text-slate-400 max-w-lg mx-auto font-medium leading-relaxed">
             Note: Data is retrieved in real-time. Please cross-verify with physical packaging labels.
