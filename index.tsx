@@ -76,9 +76,9 @@ const FoodAnalyzer = () => {
                           errMsg.includes("THROTTLED");
         
         if (isRateLimit && i < maxRetries - 1) {
-          // Robust exponential backoff: 3s, 6s, 12s, 24s, 48s... plus jitter
-          const waitTime = Math.pow(2, i) * 3000 + (Math.random() * 2000);
-          console.warn(`Gemini Quota limit. Retry ${i + 1}/${maxRetries} in ${Math.round(waitTime)}ms...`);
+          // Faster initial backoff for better responsiveness
+          const waitTime = Math.pow(2, i) * 1500 + (Math.random() * 1000);
+          console.warn(`Gemini Quota. Attempt ${i + 1}/${maxRetries}. Retrying in ${Math.round(waitTime)}ms...`);
           await new Promise(resolve => setTimeout(resolve, waitTime));
           continue;
         }
@@ -100,27 +100,18 @@ const FoodAnalyzer = () => {
 
     try {
       const prompt = `
-        Perform a deep dive analysis of the Indian food product: "${query}". 
-        This product is specifically being checked for the Indian market.
+        Search & Analyze: "${query}" in India.
         
-        Step 1: Search for the latest ingredient label of "${query}" in India (check FSSAI filings or recent supermarket listings).
-        Step 2: Identify the EXACT ingredients and their quantities (e.g., "Sugar: 35g per 100g", "Palm Oil: 15%").
-        Step 3: Evaluate each ingredient against modern nutritional science:
-           - "Healthy": Natural, whole ingredients.
-           - "Harmful": Excessive refined sugar, palm oil, MSG (E621), artificial colors (Sunset Yellow, etc.), high sodium, or trans fats.
-           - "Neutral": Stabilizers, emulsifiers (if safe), or minor additives.
-        Step 4: DOUBLE CHECK the quantities. If the product has multiple variants, specify which one you found.
+        Format your response EXCLUSIVELY as follows:
         
-        CRITICAL: Provide the response in this exact plain-text block structure:
-        
-        PRODUCT: [Official Name in India]
-        SUMMARY: [2-3 sentence health impact summary]
-        HEALTH_SCORE: [A number from 1 to 100, where 100 is cleanest]
-        FSSAI_NOTICE: [Any specific FSSAI warning or "None"]
+        PRODUCT: [Official Name]
+        SUMMARY: [2-sentence health verdict]
+        HEALTH_SCORE: [1-100]
+        FSSAI_NOTICE: [Any warning or "None"]
         
         LIST_START
-        [Name] | [Quantity] | [Status: healthy/harmful/neutral] | [Concise Reason]
-        ... (repeat for all major ingredients)
+        [Name] | [Quantity/Estimate] | [Status: healthy/harmful/neutral] | [Reason]
+        ...
         LIST_END
       `;
 
