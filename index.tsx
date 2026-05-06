@@ -43,7 +43,7 @@ const FoodAnalyzer = () => {
   const [error, setError] = useState<string | null>(null);
 
   const analyzeWithRetry = async (prompt: string, maxRetries = 4) => {
-    const apiKey = process.env.GEMINI_API_KEY || import.meta.env.VITE_GEMINI_API_KEY;
+    const apiKey = process.env.API_KEY || import.meta.env.VITE_GEMINI_API_KEY;
     
     if (!apiKey) {
       throw new Error("Missing Gemini API Key. Please ensure VITE_GEMINI_API_KEY is set in your Vercel Environment Variables.");
