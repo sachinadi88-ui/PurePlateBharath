@@ -41,7 +41,7 @@ const FoodAnalyzer = () => {
   const [result, setResult] = useState<AnalysisResult | null>(null);
   const [error, setError] = useState<string | null>(null);
 
-  const analyzeWithRetry = async (prompt: string, maxRetries = 4) => {
+  const analyzeWithRetry = async (prompt: string, maxRetries = 8) => {
     const apiKey = process.env.GEMINI_API_KEY || import.meta.env.VITE_GEMINI_API_KEY;
     
     if (!apiKey) {
@@ -72,11 +72,12 @@ const FoodAnalyzer = () => {
                           errMsg.includes("429") || 
                           errMsg.includes("RESOURCE_EXHAUSTED") || 
                           errMsg.includes("RATE_LIMIT") ||
-                          errMsg.includes("QUOTA");
+                          errMsg.includes("QUOTA") ||
+                          errMsg.includes("THROTTLED");
         
         if (isRateLimit && i < maxRetries - 1) {
-          // 4s, 8s, 16s... backoff
-          const waitTime = Math.pow(2, i + 2) * 1000 + (Math.random() * 2000);
+          // Robust exponential backoff: 3s, 6s, 12s, 24s, 48s... plus jitter
+          const waitTime = Math.pow(2, i) * 3000 + (Math.random() * 2000);
           console.warn(`Gemini Quota limit. Retry ${i + 1}/${maxRetries} in ${Math.round(waitTime)}ms...`);
           await new Promise(resolve => setTimeout(resolve, waitTime));
           continue;
