@@ -54,7 +54,7 @@ const FoodAnalyzer = () => {
     for (let i = 0; i < maxRetries; i++) {
       try {
         const response = await ai.models.generateContent({
-          model: 'gemini-1.5-flash-latest',
+          model: 'gemini-3-flash-preview',
           contents: prompt,
           config: {
             tools: [{ googleSearch: {} }] as any,
@@ -231,7 +231,7 @@ const FoodAnalyzer = () => {
             </span>
           </div>
           <div className="hidden md:flex gap-6 items-center text-sm font-bold text-slate-400">
-            <span className="flex items-center gap-2"><Zap className="w-4 h-4 text-orange-400" /> Gemini 1.5 Flash Engine</span>
+            <span className="flex items-center gap-2"><Zap className="w-4 h-4 text-orange-400" /> Gemini 3 Flash Engine</span>
             <span className="flex items-center gap-2"><CheckCircle2 className="w-4 h-4 text-emerald-400" /> FSSAI Focused</span>
           </div>
         </div>
@@ -299,7 +299,7 @@ const FoodAnalyzer = () => {
             </div>
             <div className="mt-8 text-center space-y-2">
               <h3 className="text-xl font-black text-slate-800">Analyzing Ingredients...</h3>
-              <p className="text-sm text-slate-400 font-bold uppercase tracking-widest">Powered by Gemini 1.5 Flash</p>
+              <p className="text-sm text-slate-400 font-bold uppercase tracking-widest">Powered by Gemini 3 Flash</p>
             </div>
           </div>
         )}
@@ -434,7 +434,7 @@ const FoodAnalyzer = () => {
 
         <footer className="mt-32 pt-12 border-t border-slate-200 text-center space-y-4">
           <p className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em]">
-            PurePlate Bharat AI • Gemini 1.5 Flash
+            PurePlate Bharat AI • Gemini 3 Flash
           </p>
           <p className="text-xs text-slate-400 max-w-lg mx-auto font-medium leading-relaxed">
             Note: Data is retrieved in real-time. Please cross-verify with physical packaging labels.
