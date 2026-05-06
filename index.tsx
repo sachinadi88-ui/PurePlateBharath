@@ -42,7 +42,7 @@ const FoodAnalyzer = () => {
   const [result, setResult] = useState<AnalysisResult | null>(null);
   const [error, setError] = useState<string | null>(null);
 
-  const analyzeWithRetry = async (prompt: string, maxRetries = 8) => {
+  const analyzeWithRetry = async (prompt: string, maxRetries = 4) => {
     const apiKey = process.env.GEMINI_API_KEY || import.meta.env.VITE_GEMINI_API_KEY;
     
     if (!apiKey) {
@@ -76,8 +76,8 @@ const FoodAnalyzer = () => {
                           errMsg.includes("THROTTLED");
         
         if (isRateLimit && i < maxRetries - 1) {
-          const waitTime = Math.pow(2, i) * 1000 + (Math.random() * 500);
-          setLoadingStep(`Quota limit hit. Retrying in ${Math.round(waitTime/1000)}s...`);
+          const waitTime = 1500 + (Math.random() * 1000); // Shorter wait for faster overall cycle
+          setLoadingStep(`Network busy. Tuning engine... retry ${i + 1}/${maxRetries}`);
           await new Promise(resolve => setTimeout(resolve, waitTime));
           continue;
         }
@@ -98,26 +98,20 @@ const FoodAnalyzer = () => {
 
     try {
       const prompt = `
-        Instant Search & Analyze: "${query}" in India.
-        
-        1. Unified Search: Find the most recent ingredient label and FSSAI status for "${query}".
-        2. Rapid Verdict: Evaluate health impact based on Indian nutritional standards.
-        
-        Format your response EXCLUSIVELY as follows:
-        
-        PRODUCT: [Official Name]
-        SUMMARY: [2-sentence health verdict]
+        Search & Analyze: "${query}" in India.
+        Requirement: Use Google Search to find latest Indian ingredient list.
+        Output Structure:
+        PRODUCT: [Name]
+        SUMMARY: [Short verdict]
         HEALTH_SCORE: [1-100]
-        FSSAI_NOTICE: [Any warning or "None"]
-        
+        FSSAI_NOTICE: [None/Warning]
         LIST_START
-        [Name] | [Quantity/Estimate] | [Status: healthy/harmful/neutral] | [Reason]
-        ...
+        [Name] | [Amt] | [Status: healthy/harmful/neutral] | [Reason]
         LIST_END
       `;
 
-      setTimeout(() => setLoadingStep('Analyzing chemical additives...'), 3000);
-      setTimeout(() => setLoadingStep('Verifying FSSAI guidelines...'), 6000);
+      setTimeout(() => setLoadingStep('Extracting nutrient data...'), 2500);
+      setTimeout(() => setLoadingStep('Finalizing report...'), 5000);
 
       const response = await analyzeWithRetry(prompt);
       setLoadingStep('Generating clean report...');
